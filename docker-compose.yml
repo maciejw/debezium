@@ -1,0 +1,75 @@
+networks:
+  default:
+    name: debeziumnet
+  debeziumnet:
+    driver: bridge
+
+services:
+  zookeeper:
+    image: quay.io/debezium/zookeeper:3.0
+    volumes:
+      - ./debezium-zookeeper/jmx-exporter-config.yml:/zookeeper/conf/metrics.yaml
+      - ./jmx_prometheus_javaagent-1.1.0.jar:/zookeeper/lib/jmx_prometheus_javaagent-1.1.0.jar
+    environment:
+      SERVER_JVMFLAGS: '-javaagent:/zookeeper/lib/jmx_prometheus_javaagent-1.1.0.jar=zookeeper:9404:/zookeeper/conf/metrics.yaml'
+
+  kafka:
+    image: quay.io/debezium/kafka:3.0
+    depends_on:
+      - zookeeper
+    ports:
+      - 9092:9092
+    volumes:
+      - ./debezium-kafka/jmx-exporter-config.yml:/kafka/config/metrics.yaml
+      - ./jmx_prometheus_javaagent-1.1.0.jar:/kafka/libs/jmx_prometheus_javaagent-1.1.0.jar
+    environment:
+      KAFKA_JMX_OPTS: '-javaagent:/kafka/libs/jmx_prometheus_javaagent-1.1.0.jar=kafka:9404:/kafka/config/metrics.yaml'
+      ZOOKEEPER_CONNECT: zookeeper:2181
+
+  connect:
+    image: quay.io/debezium/connect:3.0
+    depends_on:
+      - kafka
+    ports:
+      - 8083:8083
+    volumes:
+      - ./sql-credential.properties:/kafka/config/sql-credential.properties
+      - ./debezium-connect/jmx-exporter-config.yml:/kafka/config/metrics.yaml
+      - ./jmx_prometheus_javaagent-1.1.0.jar:/kafka/libs/jmx_prometheus_javaagent-1.1.0.jar
+    environment:
+      CONNECT_CONFIG_PROVIDERS: file
+      CONNECT_CONFIG_PROVIDERS_FILE_CLASS: org.apache.kafka.common.config.provider.FileConfigProvider
+      ENABLE_JMX_EXPORTER: 'true'
+      BOOTSTRAP_SERVERS: kafka:9092
+      GROUP_ID: 1
+      CONFIG_STORAGE_TOPIC: my_connect_configs
+      OFFSET_STORAGE_TOPIC: my_connect_offsets
+      STATUS_STORAGE_TOPIC: my_connect_statuses
+
+  prometheus:
+    image: prom/prometheus:v3.2.0
+    profiles:
+      - monitoring
+    volumes:
+      - ./prometheus/config.yml:/etc/prometheus/prometheus.yml
+    depends_on:
+      - connect
+      - zookeeper
+      - kafka
+    ports:
+      - 9090:9090
+
+  grafana:
+    image: grafana/grafana:11.5.2
+    profiles:
+      - monitoring
+    depends_on:
+      - prometheus
+    ports:
+      - 3000:3000
+    volumes:
+      - ./grafana/datasource.yml:/etc/grafana/provisioning/datasources/datasource.yml
+      - ./grafana/dashboard.yml:/etc/grafana/provisioning/dashboards/dashboard.yml
+      - ./grafana/settings:/var/lib/grafana/
+    environment:
+      - DS_PROMETHEUS=prometheus

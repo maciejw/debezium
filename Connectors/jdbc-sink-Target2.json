@@ -1,0 +1,23 @@
+{
+  "name": "jdbc-sink-connector-Target2",
+  "config": {
+    "connector.class": "io.debezium.connector.jdbc.JdbcSinkConnector",
+    "tasks.max": "1",
+    "hibernate.connection.driver_class": "com.microsoft.sqlserver.jdbc.SQLServerDriver",
+    "connection.url": "jdbc:sqlserver://host.docker.internal:1433;encrypt=true;trustServerCertificate=true;databaseName=Target2;",
+    "connection.username": "${file:/kafka/config/sql-credential.properties:Target2.username}",
+    "connection.password": "${file:/kafka/config/sql-credential.properties:Target2.password}",
+    "collection.name.format": "${source.table}",
+    "insert.mode": "upsert",
+    "delete.enabled": "true",
+    "primary.key.mode": "record_key",
+    "primary.key.fields": "Id",
+    "schema.evolution": "none",
+    "use.time.zone": "UTC",
+    "topics.regex": "sqlserver_source\\.Source\\.dbo.*",
+    "errors.log.enable": true,
+    "errors.log.include.messages": true,
+    "consumer.override.auto.offset.reset": "earliest",
+    "quote.identifiers": "true"
+  }
+}
